@@ -1,23 +1,15 @@
 package com.cyberhck.react;
 
 import com.intellij.lang.ASTNode;
-import com.intellij.lang.javascript.JSElementTypes;
-import com.intellij.lang.javascript.JSTokenTypes;
-import com.intellij.lang.javascript.psi.*;
+import com.intellij.lang.javascript.psi.JSFunction;
 import com.intellij.lang.javascript.psi.ecma6.TypeScriptClass;
 import com.intellij.lang.javascript.psi.ecma6.TypeScriptFunction;
-import com.intellij.lang.javascript.psi.ecma6.impl.TypeScriptFunctionImpl;
-import com.intellij.lang.javascript.psi.impl.JSBlockStatementImpl;
 import com.intellij.lang.javascript.psi.impl.JSChangeUtil;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.command.CommandProcessor;
+import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.project.Project;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiParserFacade;
 import org.jetbrains.annotations.NotNull;
-
-import javax.annotation.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 public class SagaListenerMethodAction extends BaseAction {
     final private String baseClassName = "BaseSaga";
@@ -29,44 +21,70 @@ public class SagaListenerMethodAction extends BaseAction {
     }
 
     private void addListener(AnActionEvent e) {
-        // first get the listener method and add listen action.
-        // then add the actual method later make it live action, for now hardcode
-        TypeScriptFunction listener = this.getListenerMethod(e);
         Project project = e.getProject();
-        if (listener == null || project == null) {
+        if (project == null) {
             return;
         }
-        ASTNode node = this.getTakeLatest(project);
-        if (node == null) {
-            return;
-        }
-        // add child. but in other context.
-        CommandProcessor.getInstance().executeCommand(project, () -> {
-            ApplicationManager.getApplication().runWriteAction(() -> {
-                TypeScriptClass tsc = this.getTypeScriptClassFromCaret(e);
-                if (tsc == null) {
-                    return;
-                }
-                ASTNode rbrace = listener.getLastChild().getNode();
-                if (rbrace == null) {
-                    return;
-                }
-                JSSourceElement[] statements = listener.getBody();
-                JSBlockStatement blockStatement = (JSBlockStatement) statements[0];
-                ((JSBlockStatementImpl) blockStatement).addChild(node, rbrace);
-//                blockStatement.getStatements()[0].add(node.getPsi());
-//                blockStatement.addBefore(node.getPsi(), rbrace.getPsi());
-//                blockStatement.add(node.getPsi());
-            });
-        }, null, null);
+        WriteCommandAction.runWriteCommandAction(project, () -> {
+            this.addTakeLatest(e);
+            this.addBind(e);
+            this.addMethod(e);
+        });
     }
 
-    PsiElement getWhitespace(@NotNull Project project) {
-        return PsiParserFacade.SERVICE.getInstance(project).createWhiteSpaceFromText("\n");
+    private void addTakeLatest(AnActionEvent e) {
+        final Project project = e.getProject();
+        TypeScriptFunction listener = this.getListenerMethod(e);
+        if (project == null || listener == null) {
+            return;
+        }
+        ASTNode takeLatestNode = this.getTakeLatest(project);
+        if (takeLatestNode == null) {
+            return;
+        }
+        listener.addBefore(takeLatestNode.getPsi(), listener.getLastChild().getLastChild());
+    }
+
+    private void addBind(AnActionEvent e) {
+        final Project project = e.getProject();
+        JSFunction constructor = this.getConstructor(e);
+        if (project == null || constructor == null) {
+            return;
+        }
+        ASTNode bind = this.getBindParam(project, "listen");
+        if (bind == null) {
+            return;
+        }
+        constructor.addBefore(bind.getPsi(), constructor.getLastChild().getLastChild());
+    }
+
+    private void addMethod(AnActionEvent e) {
+        final Project project = e.getProject();
+        JSFunction method = this.getMethodByName(e, "listen");
+        TypeScriptClass tsc = this.getTypeScriptClassFromCaret(e);
+        if (project == null || tsc == null || method != null) {
+            return;
+        }
+        ASTNode listenerMethod = this.getListenerMethodImplementation(project);
+        if (listenerMethod == null) {
+            return;
+        }
+        tsc.addBefore(listenerMethod.getPsi(), this.getListenerMethod(e));
+        // create method.
+    }
+
+    @Nullable
+    private ASTNode getListenerMethodImplementation(@NotNull Project project) {
+        return JSChangeUtil.createExpressionFromText(project, "public *listen(): IterableIterator<any> {}");
+    }
+
+    @Nullable
+    private ASTNode getBindParam(@NotNull Project project, @NotNull String methodName) {
+        return JSChangeUtil.createExpressionFromText(project, "this." + methodName + " = " + "this." + methodName + ".bind(this)");
     }
     @Nullable
     private ASTNode getTakeLatest(@NotNull Project project) {
-        return JSChangeUtil.createExpressionFromText(project, "takeLatest(SOMETHING, this.listen)");
+        return JSChangeUtil.createExpressionFromText(project, "takeLatest($KEY$, this.$METHOD$, $END$);");
     }
 
     @Nullable

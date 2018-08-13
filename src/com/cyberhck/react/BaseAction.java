@@ -2,7 +2,9 @@ package com.cyberhck.react;
 
 import com.intellij.lang.ASTNode;
 import com.intellij.lang.javascript.JSStubElementTypes;
+import com.intellij.lang.javascript.psi.JSFunction;
 import com.intellij.lang.javascript.psi.ecma6.TypeScriptClass;
+import com.intellij.lang.javascript.psi.ecma6.TypeScriptFunction;
 import com.intellij.lang.javascript.psi.ecma6.impl.TypeScriptClassImpl;
 import com.intellij.lang.javascript.psi.ecmal4.JSClass;
 import com.intellij.lang.javascript.psi.ecmal4.JSReferenceList;
@@ -95,6 +97,24 @@ public abstract class BaseAction extends AnAction {
             }
         }
         return false;
+    }
+
+    @Nullable
+    JSFunction getConstructor(AnActionEvent e) {
+        TypeScriptClass tsc = this.getTypeScriptClassFromCaret(e);
+        if (tsc == null) {
+            return null;
+        }
+        return tsc.getConstructor();
+    }
+
+    @Nullable
+    JSFunction getMethodByName(AnActionEvent e, String name) {
+        TypeScriptClass tsc = this.getTypeScriptClassFromCaret(e);
+        if (tsc == null) {
+            return null;
+        }
+        return tsc.findFunctionByName(name);
     }
 
     TypeScriptClassImpl getTypeScriptClass(PsiFile file) {
