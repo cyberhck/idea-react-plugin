@@ -3,9 +3,11 @@ package com.cyberhck.react;
 import com.intellij.lang.ASTNode;
 import com.intellij.lang.javascript.JSElementTypes;
 import com.intellij.lang.javascript.JSTokenTypes;
-import com.intellij.lang.javascript.psi.JSFunction;
+import com.intellij.lang.javascript.psi.*;
 import com.intellij.lang.javascript.psi.ecma6.TypeScriptClass;
 import com.intellij.lang.javascript.psi.ecma6.TypeScriptFunction;
+import com.intellij.lang.javascript.psi.ecma6.impl.TypeScriptFunctionImpl;
+import com.intellij.lang.javascript.psi.impl.JSBlockStatementImpl;
 import com.intellij.lang.javascript.psi.impl.JSChangeUtil;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.application.ApplicationManager;
@@ -41,18 +43,20 @@ public class SagaListenerMethodAction extends BaseAction {
         // add child. but in other context.
         CommandProcessor.getInstance().executeCommand(project, () -> {
             ApplicationManager.getApplication().runWriteAction(() -> {
-                ASTNode block = listener.getNode().findChildByType(JSElementTypes.BLOCK_STATEMENT);
                 TypeScriptClass tsc = this.getTypeScriptClassFromCaret(e);
-                if (block == null || tsc == null) {
+                if (tsc == null) {
                     return;
                 }
-                ASTNode rbrace = block.findChildByType(JSTokenTypes.RBRACE);
+                ASTNode rbrace = listener.getLastChild().getNode();
                 if (rbrace == null) {
                     return;
                 }
-                JSFunction jsFun = (JSFunction) tsc;
-                listener.addBefore(node.getPsi(), rbrace.getPsi());
-//                listener.addBefore(node.getPsi(), rbrace.getPsi());
+                JSSourceElement[] statements = listener.getBody();
+                JSBlockStatement blockStatement = (JSBlockStatement) statements[0];
+                ((JSBlockStatementImpl) blockStatement).addChild(node, rbrace);
+//                blockStatement.getStatements()[0].add(node.getPsi());
+//                blockStatement.addBefore(node.getPsi(), rbrace.getPsi());
+//                blockStatement.add(node.getPsi());
             });
         }, null, null);
     }
